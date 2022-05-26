@@ -2,6 +2,7 @@
 # -*- coding: utf-8 -*-
 import base64
 import hashlib
+import merkle
 import sigstore
 import simplejson as json
 
@@ -82,9 +83,15 @@ def main():
 
         try:
             public_key.verify(base64.b64decode(rekor_cert), artifact.encode(), ec.ECDSA(hashes.SHA256()))
-            print('Allowlist signature verification against Rekor passed!!!!')
+            print('Artifact signature verification against Rekor passed!')
         except:
-            print('Allowlist signature verification against Rekor failed!')
+            print('Artifact signature verification against Rekor failed!')
+
+        try:
+            merkle.verify_merkle_inclusion(entries[entry])
+            print("Inclusion proof verified!")
+        except merkle.InvalidInclusionProofError as e:
+            print(e)
 
 if __name__ == "__main__":
     main()
