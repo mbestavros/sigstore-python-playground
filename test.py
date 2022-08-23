@@ -4,7 +4,7 @@ import base64
 import hashlib
 import merkle
 import sigstore
-import simplejson as json
+import json
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
