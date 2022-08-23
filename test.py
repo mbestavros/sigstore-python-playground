@@ -37,7 +37,7 @@ def main():
 
     print(" --- SIGNING STEP --- ")
 
-    artifact = "Sigstore is the future!"
+    artifact = "Sigstore is the future!!"
 
     upload_response = sigstore.sign_offline_and_upload(private_key, artifact)
 
@@ -59,15 +59,23 @@ def main():
 
         fetch_uuid_response = sigstore.fetch_with_uuid(uuid=uuid)
 
-        entry = json.loads(fetch_uuid_response.content)
-        encoded_rekord = entry[uuid]["body"]
+        entries = json.loads(fetch_uuid_response.content)
+        for key in entries.keys():
+            entry = entries[key]
+        encoded_rekord = entry["body"]
         rekor_cert = json.loads(base64.b64decode(encoded_rekord))['spec']['signature']['content']
 
         try:
             public_key.verify(base64.b64decode(rekor_cert), artifact.encode(), ec.ECDSA(hashes.SHA256()))
-            print(f'{uuid}: PASS')
+            print(f'{uuid}: Signature validation: PASS')
         except:
-            print(f'{uuid}: FAIL')
+            print(f'{uuid}: Signature validation: FAIL')
+
+        try:
+            merkle.verify_merkle_inclusion(entry)
+            print("Inclusion proof verified!")
+        except merkle.InvalidInclusionProofError as e:
+            print(e)
 
     print()
     print(" --- VERIFICATION STEP - INPUTS SEARCH --- ")
