@@ -57,7 +57,11 @@ def main(argv):
         alist_raw = f.read()
 
     tlog_policy = {}
-    for line in alist_raw.splitlines()[:10]:
+    artifacts = {}
+    counter = 0
+    for line in alist_raw.splitlines():
+        if counter >= 10:
+            break
         line = line.strip()
         if len(line) == 0:
             continue
@@ -69,23 +73,29 @@ def main(argv):
 
         (checksum_hash, path) = pieces
 
+        try:
+            with open(path, "rb") as f:
+                artifact = f.read()
+                counter += 1
+        except:
+            print(f"Couldn't open {path}")
+            continue
+
         tlog_policy[path] = checksum_hash
-
+        artifacts[checksum_hash] = artifact
         print(f"Uploading path: {path}")
-
-        with open(path, "rb") as artifact:
-            upload_response = sigstore.sign_offline_and_upload(private_key, artifact)
+        upload_response = sigstore.sign_offline_and_upload(private_key, artifact)
 
     print()
     print(" --- VERIFICATION STEP - HASH SEARCH --- ")
 
-    for artifact_hash in tlog_policy:
+    for artifact_hash in tlog_policy.values():
 
         search_response = sigstore.search(hash=artifact_hash)
 
         uuids = json.loads(search_response.content)
 
-        print('Found UUIDs matching provided artifact hash. Verifying...')
+        print(f'Found UUIDs matching provided artifact hash. Verifying...')
 
         for uuid in uuids:
 
@@ -98,17 +108,22 @@ def main(argv):
             rekor_cert = json.loads(base64.b64decode(encoded_rekord))['spec']['signature']['content']
 
             try:
-                public_key.verify(base64.b64decode(rekor_cert), artifact.encode(), ec.ECDSA(hashes.SHA256()))
-                print(f'{uuid}: Signature validation: PASS')
-            except:
-                print(f'{uuid}: Signature validation: FAIL')
+                public_key.verify(base64.b64decode(rekor_cert), artifacts[artifact_hash], ec.ECDSA(hashes.SHA256()))
+                print(f'{uuid[:16]}: Signature validation: PASS')
+            except Exception as e:
+                print(f'{uuid[:16]}: Signature validation: FAIL')
 
             try:
                 merkle.verify_merkle_inclusion(entry)
                 print("Inclusion proof verified!")
             except merkle.InvalidInclusionProofError as e:
+                print("Inclusion proof failed to verify!")
                 print(e)
 
+    print()
+    print(" --- WRITE POLICY OUT --- ")
+    with open("tlog_policy.json", "w") as f:
+        json.dump(tlog_policy, f)
 
 if __name__ == "__main__":
     main(sys.argv[1:])

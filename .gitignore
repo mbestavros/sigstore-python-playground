@@ -2,6 +2,9 @@
 private.key
 public.pem
 
+# Ignore created files
+tlog_policy.json
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]

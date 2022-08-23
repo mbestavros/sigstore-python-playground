@@ -19,20 +19,20 @@ def sign_offline_and_upload(private_key, artifact):
 
     # Sign artifact
     artifact_signature = private_key.sign(
-        artifact.encode(),
+        artifact,
         ec.ECDSA(hashes.SHA256())
     )
 
     # Test signature
     try:
-        public_key.verify(artifact_signature, artifact.encode(), ec.ECDSA(hashes.SHA256()))
+        public_key.verify(artifact_signature, artifact, ec.ECDSA(hashes.SHA256()))
         print('Artifact signature local verification passed.')
     except:
         print('Artifact signature local verification failed!')
 
     # Prepare inputs
     artifact_signature_b64 = base64.b64encode(artifact_signature)
-    artifact_hash = hashlib.sha256(artifact.encode()).hexdigest()
+    artifact_hash = hashlib.sha256(artifact).hexdigest()
     pub_b64 = _encode_pubkey(public_key)
 
     # Prepare upload payload
