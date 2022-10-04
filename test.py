@@ -2,9 +2,17 @@
 # -*- coding: utf-8 -*-
 import base64
 import hashlib
-import merkle
-import sigstore
 import json
+import sigstore._sign as sign
+import sigstore._verify as verify
+
+from sigstore._internal.oidc.issuer import Issuer
+from sigstore._internal.oidc.oauth import (
+    DEFAULT_OAUTH_ISSUER,
+    STAGING_OAUTH_ISSUER,
+    get_identity_token,
+)
+
 
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.backends import default_backend
@@ -37,69 +45,29 @@ def main():
 
     print(" --- SIGNING STEP --- ")
 
-    artifact = "Sigstore is the future!!"
+    signer = sign.Signer.staging()
 
-    upload_response = sigstore.sign_offline_and_upload(private_key, artifact)
+    issuer = Issuer(STAGING_OAUTH_ISSUER)
 
-    print("Rekor upload response:")
-    print(json.dumps(json.loads(upload_response["response"].content), indent=4, sort_keys=True))
+    identity_token = get_identity_token(
+        "sigstore",
+        "", # oidc client secret
+        issuer,
+    )
 
-    print()
-    print(" --- VERIFICATION STEP - HASH SEARCH --- ")
+    artifact = b"Sigstore is the future!"
 
-    artifact_hash = hashlib.sha256(artifact.encode()).hexdigest()
+    result = signer.sign(
+        input_=artifact,
+        identity_token=identity_token
+    )
 
-    search_response = sigstore.search(hash=artifact_hash)
+    print("Using ephemeral certificate:")
+    print(result.cert_pem)
 
-    uuids = json.loads(search_response.content)
+    print(f"Transparency log entry created at index: {result.log_entry.log_index}")
 
-    print('Found UUIDs matching provided artifact hash. Verifying...')
 
-    for uuid in uuids:
-
-        fetch_uuid_response = sigstore.fetch_with_uuid(uuid=uuid)
-
-        entries = json.loads(fetch_uuid_response.content)
-        for key in entries.keys():
-            entry = entries[key]
-        encoded_rekord = entry["body"]
-        rekor_cert = json.loads(base64.b64decode(encoded_rekord))['spec']['signature']['content']
-
-        try:
-            public_key.verify(base64.b64decode(rekor_cert), artifact.encode(), ec.ECDSA(hashes.SHA256()))
-            print(f'{uuid}: Signature validation: PASS')
-        except:
-            print(f'{uuid}: Signature validation: FAIL')
-
-        try:
-            merkle.verify_merkle_inclusion(entry)
-            print("Inclusion proof verified!")
-        except merkle.InvalidInclusionProofError as e:
-            print(e)
-
-    print()
-    print(" --- VERIFICATION STEP - INPUTS SEARCH --- ")
-
-    artifact_signature = upload_response["signature"]
-    fetch_inputs_response = sigstore.fetch_with_inputs(artifact_signature, public_key, artifact_hash)
-    entries = json.loads(fetch_inputs_response.content)[0]
-    print("Retrieved entries:")
-    print(json.dumps(entries, indent=4, sort_keys=True))
-    for entry in entries.keys():
-        entry_encoded = entries[entry]['body']
-        rekor_cert = json.loads(base64.b64decode(entry_encoded))['spec']['signature']['content']
-
-        try:
-            public_key.verify(base64.b64decode(rekor_cert), artifact.encode(), ec.ECDSA(hashes.SHA256()))
-            print('Artifact signature verification against Rekor passed!')
-        except:
-            print('Artifact signature verification against Rekor failed!')
-
-        try:
-            merkle.verify_merkle_inclusion(entries[entry])
-            print("Inclusion proof verified!")
-        except merkle.InvalidInclusionProofError as e:
-            print(e)
 
 if __name__ == "__main__":
     main()
