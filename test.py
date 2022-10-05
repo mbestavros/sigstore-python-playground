@@ -2,12 +2,6 @@
 # -*- coding: utf-8 -*-
 from typing import cast
 
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from os.path import exists
-
 from sigstore._internal.oidc.issuer import Issuer
 from sigstore._internal.oidc.oauth import (
     DEFAULT_OAUTH_ISSUER,
@@ -22,27 +16,6 @@ from sigstore._verify import (
 )
 
 def main():
-    # --- CREATE KEYPAIR (for manual signing if needed) ---
-
-    if not exists("private.key"):
-        print("Private key not found, creating a new one...")
-        private_key = ec.generate_private_key(ec.SECP256R1(), default_backend()).private_bytes(
-            encoding=serialization.Encoding.PEM,
-            format=serialization.PrivateFormat.TraditionalOpenSSL,
-            encryption_algorithm=serialization.NoEncryption()
-        )
-        with open("private.key", 'wb') as pem_out:
-            pem_out.write(private_key)
-
-    with open("private.key", 'rb') as pem_in:
-        pemlines = pem_in.read()
-    private_key = load_pem_private_key(pemlines, None, default_backend())
-    public_key = private_key.public_key()
-
-    # Write public key to a file
-    with open("public.pem", "wb") as pem_out:
-        pem_out.write(public_key.public_bytes(encoding=serialization.Encoding.PEM, format=serialization.PublicFormat.SubjectPublicKeyInfo))
-
     print(" --- SIGNING STEP --- ")
 
     signer = Signer.staging()
