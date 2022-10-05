@@ -1,10 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-import base64
-import hashlib
-import json
-import sigstore._sign as sign
-import sigstore._verify as verify
+from typing import cast
+
+from cryptography.hazmat.backends import default_backend
+from cryptography.hazmat.primitives import serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.serialization import load_pem_private_key
+from os.path import exists
 
 from sigstore._internal.oidc.issuer import Issuer
 from sigstore._internal.oidc.oauth import (
@@ -12,17 +14,15 @@ from sigstore._internal.oidc.oauth import (
     STAGING_OAUTH_ISSUER,
     get_identity_token,
 )
-
-
-from cryptography.hazmat.primitives import hashes
-from cryptography.hazmat.backends import default_backend
-from cryptography.hazmat.primitives import serialization
-from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives.serialization import load_pem_private_key
-from os.path import exists
+from sigstore._sign import Signer
+from sigstore._verify import (
+    CertificateVerificationFailure,
+    VerificationFailure,
+    Verifier,
+)
 
 def main():
-    # --- CREATE KEYS ---
+    # --- CREATE KEYPAIR (for manual signing if needed) ---
 
     if not exists("private.key"):
         print("Private key not found, creating a new one...")
@@ -45,9 +45,10 @@ def main():
 
     print(" --- SIGNING STEP --- ")
 
-    signer = sign.Signer.staging()
+    signer = Signer.staging()
+    #signer = Signer.production()
 
-    issuer = Issuer(STAGING_OAUTH_ISSUER)
+    issuer = Issuer(STAGING_OAUTH_ISSUER) # use DEFAULT_OAUTH_ISSUER if using production
 
     identity_token = get_identity_token(
         "sigstore",
@@ -67,6 +68,26 @@ def main():
 
     print(f"Transparency log entry created at index: {result.log_entry.log_index}")
 
+    artifact_signature = result.b64_signature
+    artifact_certificate = result.cert_pem.encode()
+
+    print(" --- VERIFICATION STEP --- ")
+
+    verifier = Verifier.staging()
+    #verifier = Verifier.production()
+
+    result = verifier.verify(
+        input_=artifact,
+        certificate=artifact_certificate,
+        signature=artifact_signature
+    )
+
+    if result:
+        print(f"OK")
+    else:
+        result = cast(VerificationFailure, result)
+        print(f"FAIL")
+        print(f"Failure reason: {result.reason}")
 
 
 if __name__ == "__main__":
